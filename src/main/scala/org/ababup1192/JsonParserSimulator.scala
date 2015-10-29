@@ -4,7 +4,7 @@ import name.lakhin.eliah.projects.papacarlo.examples.Json
 import name.lakhin.eliah.projects.papacarlo.syntax.Node
 
 // papacarlo.syntax.Node型を少し扱いやすくした型
-case class MyNode(id: Int, parentId: Int, childrenId: List[Int], kind: String, values: Option[Any])
+case class MyNode(id: Int, parentId: Int, childrenId: List[Int], kind: String, value: Option[Any])
 
 object JsonParserSimulator {
 
@@ -51,10 +51,11 @@ object JsonParserSimulator {
    */
   private def exportNode(node: Node): MyNode = {
     val parentId = node.getParent.map(_.getId).getOrElse(-1)
-    MyNode(node.getId, parentId,
-      node.getBranches.flatMap(_._2).map(_.getId).toList, node.getKind,
-      node.getValues.flatMap { case (key, values) => values }.headOption
-    )
+
+    val value = node.getValues.flatMap(_._2).headOption
+    val childrenId = node.getBranches.flatMap(_._2).map(_.getId).toList
+
+    MyNode(node.getId, parentId, childrenId, node.getKind, value)
   }
 
 }
