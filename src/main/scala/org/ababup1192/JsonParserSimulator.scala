@@ -1,10 +1,12 @@
 package org.ababup1192
 
 import name.lakhin.eliah.projects.papacarlo.examples.Json
+import name.lakhin.eliah.projects.papacarlo.lexis.TokenReference
 import name.lakhin.eliah.projects.papacarlo.syntax.Node
+import spray.json._
 
 // papacarlo.syntax.Node型を少し扱いやすくした型
-case class MyNode(id: Int, parentId: Int, childrenId: List[Int], kind: String, value: Option[Any])
+case class MyFragment(id: Int, from: Map[String, Int], to: Map[String, Int])
 
 object JsonParserSimulator {
 
@@ -28,34 +30,53 @@ object JsonParserSimulator {
 
     println(json)
     println(ast)
+    println(ast.elements.map { element =>
+      element.asJsObject.getFields("childrenId")
+    })
   }
 
   /**
-   * NodeをIDを使って取得していって、取得出来たらMyNode型に変換してListに追加していく。
-   * @return ID順のMyNodeのList。
+   * AST -> JsonASTに変換
+   * @return ノードの配列
    */
-  def ast: List[MyNode] = {
-    val ast = addedNodes.reverse.foldLeft(List.empty[MyNode]) { (list, id) =>
+  def ast: JsArray = {
+    val ast = addedNodes.reverse.foldLeft(JsArray.empty) { (jsArray, id) =>
       jsonSyntax.getNode(id) match {
-        case Some(node) => exportNode(node) :: list
-        case None => list
+        case Some(node) => JsArray(jsArray.elements :+ exportJsValue(node))
+        case None => jsArray
       }
-    }.reverse
+    }
     ast
   }
 
   /**
-   * Node -> MyNodeに変換するためのメソッド
+   * Node -> JsValueに変換するためのメソッド
    * @param node 変換対象のノード
-   * @return 変換後のノード
+   * @return 変換後のJsValue
    */
-  private def exportNode(node: Node): MyNode = {
+  private def exportJsValue(node: Node): JsValue = {
     val parentId = node.getParent.map(_.getId).getOrElse(-1)
 
-    val value = node.getValues.flatMap(_._2).headOption
-    val childrenId = node.getBranches.flatMap(_._2).map(_.getId).toList
+    val childrenId = node.getBranches.flatMap(_._2).map(_.getId).map(JsNumber(_)).toVector
+    val values = node.getValues.flatMap(_._2).map(JsString(_)).toVector
 
-    MyNode(node.getId, parentId, childrenId, node.getKind, value)
+    JsObject(Map("id" -> JsNumber(node.getId), "parentId" -> JsNumber(parentId),
+      "childrenId" -> JsArray(childrenId), "kind" -> JsString(node.getKind), "value" -> JsArray(values)))
   }
+
+  def getNodeFragment(id: Int): Option[MyFragment] = {
+    jsonSyntax.getNode(id) match {
+      case Some(node) =>
+        Some(MyFragment(id, tokenCursor(node.getBegin), tokenCursor(node.getEnd, after = true)))
+      case None => None
+    }
+  }
+
+  private def tokenCursor(token: TokenReference, after: Boolean = false): Map[String, Int] = {
+    val pair = token.collection.cursor(token.index + (if (after) 1 else 0))
+
+    Map("line" -> (pair._1 - 1), "ch" -> (pair._2 - 1))
+  }
+
 
 }
